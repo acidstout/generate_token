@@ -1,4 +1,4 @@
-package logintoken;
+package loginToken;
 
 public class GeneratorConfig {
 

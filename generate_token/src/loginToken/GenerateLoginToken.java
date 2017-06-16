@@ -35,15 +35,17 @@
  *  		blah = https://example.com/app?token=6icAtIasSM99R0kWq7er8g%3D%3D%3AoCYqMl5j%2F7oYYeYf4GukzrrwGcYHWjXhHTX63oPsTj37YPeRg2B%2Bxo7SlAMhyjn3
  * 
  ******************************************************************************/
-package logintoken;
+package loginToken;
 
 //Imports
 import java.io.UnsupportedEncodingException;	// Used by getBytes() in generateKey()
 import java.net.URLEncoder;						// Urlencode the login token.
+import java.security.InvalidAlgorithmParameterException;
+import java.security.InvalidKeyException;
 import java.security.MessageDigest;				// SHA-256
 import java.security.NoSuchAlgorithmException;	// SHA-256
 import java.security.SecureRandom;				// Generate random IV.
-
+import java.security.spec.InvalidKeySpecException;
 import java.text.SimpleDateFormat;				// Format timestamp of login token generation.
 import java.util.Arrays;
 import java.util.Base64;						// Requires JDK 8.
@@ -55,7 +57,10 @@ import java.util.TimeZone;						// Get current date/time. We use UTC.
 import java.util.TreeMap;						// Holds sorted list of GUIDs.
 import java.util.UUID;							// Used to check if value is UUID/GUID.
 
+import javax.crypto.BadPaddingException;
 import javax.crypto.Cipher;						// AES
+import javax.crypto.IllegalBlockSizeException;
+import javax.crypto.NoSuchPaddingException;
 import javax.crypto.SecretKey;					// AES
 import javax.crypto.spec.IvParameterSpec;		// AES
 import javax.crypto.spec.SecretKeySpec;			// AES
@@ -84,14 +89,23 @@ public class GenerateLoginToken {
 	private static String encryptionKey           = "Secret";				// Demo encryption key. Proper one will be set in configuration.
 	private static String url                     = "https://example.com/app?token=";	// Demo URL where the application runs.
 	
-	// Check if a string is a hexadecimal value
-	private static boolean isHex(String str) {
+	/**
+	 * Check if a string is a hexadecimal value 
+	 * @param str
+	 * @return
+	 */
+	private static boolean _isHex(final String str) {
 		return str.matches("[0-9a-fA-F]+") && str.length() % 2 == 0;
-	}// END: isHex()
+	}
 	
 	
-	// Check if a string is a UUID
-	private static boolean isUUID(String str) {
+	/**
+	 * Check if a string is a UUID
+	 * 
+	 * @param str
+	 * @return
+	 */
+	private static boolean _isUUID(String str) {
 		if (str != null && str.length() > 0) {
 			if (str.contains("{") || str.contains("}")) {
 				str = str.replace("{", "");
@@ -106,19 +120,30 @@ public class GenerateLoginToken {
 			}
 		}
 		return false;
-	}// END: isUUID()
+	}
 
 	
-	// Use a string to generate a valid byte array from, which complies to the defined keysize.
-	private static byte[] generateKey(String str) throws UnsupportedEncodingException, NoSuchAlgorithmException { 
+	/**
+	 * Use a string to generate a valid byte array from, which complies to the defined keysize.
+	 *
+	 * @param str
+	 * @return
+	 * @throws UnsupportedEncodingException
+	 * @throws NoSuchAlgorithmException
+	 */
+	private static byte[] _generateKey(final String str) throws UnsupportedEncodingException, NoSuchAlgorithmException { 
 		MessageDigest sha = MessageDigest.getInstance("SHA-256");
 		byte[] key = sha.digest(str.getBytes(defaultCharset));
 		return Arrays.copyOf(key, (keysize / 8));
-	}// END: generateKey()
+	}
 	
 	
-	// Main routine
-	public static void main(String[] args) {
+	/**
+	 * Main routine
+	 * 
+	 * @param args
+	 */
+	public static void main(final String[] args) {
 		// Check and load customer specific configuration if applicable
 		if (use_custom_data) {
 			if (GeneratorConfig.encryptionKey != null && GeneratorConfig.encryptionKey.length() > 0) {
@@ -173,7 +198,7 @@ public class GenerateLoginToken {
 					
 					if (use_uuid) {
 						// Only use value instead of key if value looks like a UUID.
-						if (isUUID(pair.getValue())) {
+						if (_isUUID(pair.getValue())) {
 							user = pair.getValue();										// Use the value (e.g. UUID).
 						} else {
 							user = pair.getKey();										// Use the key
@@ -190,52 +215,9 @@ public class GenerateLoginToken {
 			
 					// Generate key from encryptionKey and IV, AES-encrypt payload and encode the result as Base64.
 					try {
-						byte[] keyBytes;
+						// Encrypt payload
+						encryptedPayload = _generatePayload(payload, iv);
 
-						if (use_simple_AES) {
-							if (isHex(encryptionKey)) {
-								try {
-									keyBytes = DatatypeConverter.parseHexBinary(encryptionKey);	// Convert the encryption key from hex (String) to byte[].
-								} catch (IllegalArgumentException e) {
-									keyBytes = generateKey(encryptionKey);						// Generate a valid key from the given string.
-								}
-							} else {
-								keyBytes = generateKey(encryptionKey);							// Generate a valid key from the given string.
-							}
-							
-							final SecretKey secretKey = new SecretKeySpec(keyBytes, algorithm);	// Prepare secret key.
-							final byte[] input = payload.getBytes(defaultCharset);				// Convert payload (String) into byte[].
-							final Cipher c = Cipher.getInstance(transformation);				// Set encryption algorithm.
-							c.init(Cipher.ENCRYPT_MODE, secretKey, new IvParameterSpec(iv));	// Prepare encryption.
-							final byte[] encValue = c.doFinal(input);							// Encrypt payload.
-							encryptedPayload = Base64.getEncoder().encodeToString(encValue);	// Base64 encode encrypted payload.
-						} else {
-							String encryptionKey_tmp;
-							
-							if (isHex(encryptionKey)) {
-								try {
-									keyBytes = DatatypeConverter.parseHexBinary(encryptionKey);	// Parse encryption key as hex.
-								} catch (IllegalArgumentException e) {
-									keyBytes = generateKey(encryptionKey);						// Generate a valid key from the given string.
-								}
-							} else {
-								keyBytes = generateKey(encryptionKey);							// Generate a valid key from the given string.
-							}
-
-							encryptionKey_tmp = new String(keyBytes, defaultCharset);			// Convert byte[] into String ...
-							
-							final PBEKeySpec spec = new PBEKeySpec(encryptionKey_tmp.toCharArray(), iv, iterations, keysize);	// ... convert String to char[] in order to use it with PBEKeySpec.
-							final SecretKeyFactory factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA1");	// Use PBKDF2 salted password hashing.
-							final SecretKey secretKey = factory.generateSecret(spec);			// Prepare secret key.
-							final SecretKeySpec keySpec = new SecretKeySpec(secretKey.getEncoded(), algorithm);
-							final IvParameterSpec ivSpec = new IvParameterSpec(iv);				// Prepare IV.
-							final byte[] input = payload.getBytes(defaultCharset);				// Convert payload (String) into byte[].
-							final Cipher c = Cipher.getInstance(transformation);				// Set encryption algorithm.
-							c.init(Cipher.ENCRYPT_MODE, keySpec, ivSpec);						// Prepare encryption.
-							final byte[] encValue = c.doFinal(input);							// Encrypt payload.
-							encryptedPayload = Base64.getEncoder().encodeToString(encValue);	// Base64 encode encrypted payload.
-						}
-	
 						// Build and show link to user.
 						// System.out.println(encoded_IV + ":" + encryptedPayload);
 						System.out.println(user + " = " + url + URLEncoder.encode(encoded_IV + ":" + encryptedPayload, defaultCharset));
@@ -248,5 +230,62 @@ public class GenerateLoginToken {
 		} else {
 			System.out.println("Missing parameter.");
 		}
-	}// END: main()
-}// END: class GenerateLoginToken
+	}
+	
+	
+	/**
+	 * Method to encrypt a given payload
+	 * 
+	 * @param payload
+	 * @param iv
+	 * @return
+	 * @throws UnsupportedEncodingException
+	 * @throws NoSuchAlgorithmException
+	 * @throws NoSuchPaddingException
+	 * @throws InvalidKeyException
+	 * @throws InvalidAlgorithmParameterException
+	 * @throws IllegalBlockSizeException
+	 * @throws BadPaddingException
+	 * @throws InvalidKeySpecException
+	 */
+	private static String _generatePayload(final String payload, final byte[] iv)
+		throws UnsupportedEncodingException,
+			NoSuchAlgorithmException,
+			NoSuchPaddingException,
+			InvalidKeyException,
+			InvalidAlgorithmParameterException,
+			IllegalBlockSizeException,
+			BadPaddingException,
+			InvalidKeySpecException {
+		
+		byte[] keyBytes;
+		final byte[] encValue;
+		final byte[] input = payload.getBytes(defaultCharset);				// Convert payload (String) into byte[].
+		final Cipher c = Cipher.getInstance(transformation);				// Set encryption algorithm.
+
+		if (_isHex(encryptionKey)) {
+			try {
+				keyBytes = DatatypeConverter.parseHexBinary(encryptionKey);	// Parse encryption key as hex.
+			} catch (IllegalArgumentException e) {
+				keyBytes = _generateKey(encryptionKey);						// Generate a valid key from the given string.
+			}
+		} else {
+			keyBytes = _generateKey(encryptionKey);							// Generate a valid key from the given string.
+		}
+
+		if (use_simple_AES) {
+			final SecretKey secretKey = new SecretKeySpec(keyBytes, algorithm);	// Prepare secret key.
+			c.init(Cipher.ENCRYPT_MODE, secretKey, new IvParameterSpec(iv));	// Prepare encryption.
+		} else {
+			String encryptionKey_tmp = new String(keyBytes, defaultCharset);	// Convert byte[] into String ...
+			final PBEKeySpec spec = new PBEKeySpec(encryptionKey_tmp.toCharArray(), iv, iterations, keysize);	// ... convert String to char[] in order to use it with PBEKeySpec.
+			final SecretKeyFactory factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA1");	// Use PBKDF2 salted password hashing.
+			final SecretKey secretKey = factory.generateSecret(spec);			// Prepare secret key.
+			final SecretKeySpec keySpec = new SecretKeySpec(secretKey.getEncoded(), algorithm);
+			c.init(Cipher.ENCRYPT_MODE, keySpec, new IvParameterSpec(iv));		// Prepare encryption.
+		}
+
+		encValue = c.doFinal(input);							// Encrypt payload.
+		return Base64.getEncoder().encodeToString(encValue);	// Base64 encode encrypted payload.
+	}
+}
