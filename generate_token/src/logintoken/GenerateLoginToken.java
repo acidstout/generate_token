@@ -100,10 +100,7 @@ public class GenerateLoginToken {
 			
 			try {
 				UUID uuid = UUID.fromString(str);
-				if (uuid != null) {
-					return true;
-				}
-				return false;
+				return uuid != null;
 			} catch (IllegalArgumentException e) {
 				return false;
 			}
