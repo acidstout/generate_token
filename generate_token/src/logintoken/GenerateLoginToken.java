@@ -35,7 +35,7 @@
  *  		blah = https://example.com/app?token=6icAtIasSM99R0kWq7er8g%3D%3D%3AoCYqMl5j%2F7oYYeYf4GukzrrwGcYHWjXhHTX63oPsTj37YPeRg2B%2Bxo7SlAMhyjn3
  * 
  ******************************************************************************/
-package loginToken;
+package logintoken;
 
 //Imports
 import java.io.UnsupportedEncodingException;	// Used by getBytes() in generateKey()
@@ -86,11 +86,7 @@ public class GenerateLoginToken {
 	
 	// Check if a string is a hexadecimal value
 	private static boolean isHex(String str) {
-		if (str.matches("[0-9a-fA-F]+") && str.length() % 2 == 0) {
-			return true;
-		} else {
-			return false;
-		}
+		return str.matches("[0-9a-fA-F]+") && str.length() % 2 == 0;
 	}// END: isHex()
 	
 	
@@ -106,15 +102,13 @@ public class GenerateLoginToken {
 				UUID uuid = UUID.fromString(str);
 				if (uuid != null) {
 					return true;
-				} else {
-					return false;
 				}
+				return false;
 			} catch (IllegalArgumentException e) {
 				return false;
 			}
-		} else {
-			return false;
 		}
+		return false;
 	}// END: isUUID()
 
 	
@@ -152,20 +146,14 @@ public class GenerateLoginToken {
 		if (args.length > 0) {
 			for (String s : args) {
 				final String[] tmp = s.split("=");
-				// If the tmp array contains at least two entries 
-				if (tmp.length >= 2) {
-					// ... and if current key doesn't yet exist ...
-					if (!userIDs.containsKey(tmp[0]) && tmp[1] != null && tmp[1].length() > 0) {
-						// ... add the key and its value to our list.
-						userIDs.put(tmp[0], tmp[1]);
-					}
-				// ... otherwise ... 
-				} else if (tmp.length == 1) {
-					// and if current key doesn't yet exist ...
-					if (!userIDs.containsKey(tmp[0])) {
-						// ... use the key as value and add both to our list.
-						userIDs.put(tmp[0], tmp[0]);
-					}
+				// If the tmp array contains at least two entries and if current key doesn't yet exist ...
+				if (tmp.length >= 2 && !userIDs.containsKey(tmp[0]) && tmp[1] != null && tmp[1].length() > 0) {
+					// ... add the key and its value to our list.
+					userIDs.put(tmp[0], tmp[1]);
+				// ... otherwise if length is 1 and if current key doesn't yet exist 
+				} else if (tmp.length == 1 && !userIDs.containsKey(tmp[0])) {
+					// ... use the key as value and add both to our list.
+					userIDs.put(tmp[0], tmp[0]);
 				}
 			}
 		}
