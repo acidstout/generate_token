@@ -55,7 +55,6 @@ import java.util.Iterator;						// Iterate through the TreeMap of GUIDs.
 import java.util.Map.Entry;						// Get each entry of the TreeMap.
 import java.util.TimeZone;						// Get current date/time. We use UTC.
 import java.util.TreeMap;						// Holds sorted list of GUIDs.
-import java.util.UUID;							// Used to check if value is UUID/GUID.
 
 import javax.crypto.BadPaddingException;
 import javax.crypto.Cipher;						// AES
@@ -74,8 +73,6 @@ public class GenerateLoginToken {
 	// Hard-coded configuration.
 	// TODO: Make this configurable via command line.
 	private static final boolean use_simple_AES   = false;								// If set to true, we don't use PBKDF2 salted password hashing.
-	private static final boolean use_uuid         = false;								// If set to true, the GUID is used instead of the supplied username.
-	private static final boolean use_custom_data  = false;								// If set to true, encryptionKey and/or url will be replaced by customer data.
 
 	private static final int keysize              = 128;								// 128 bits keysize. Alternatively use 192 or 256 bits.
 	private static final int iterations           = 65535;								// Number of iterations. Higher is better, but also slower.
@@ -98,30 +95,6 @@ public class GenerateLoginToken {
 		return str.matches("[0-9a-fA-F]+") && str.length() % 2 == 0;
 	}
 	
-	
-	/**
-	 * Check if a string is a UUID
-	 * 
-	 * @param str
-	 * @return
-	 */
-	private static boolean isUUID(String str) {
-		if (str != null && str.length() > 0) {
-			if (str.contains("{") || str.contains("}")) {
-				str = str.replace("{", "");
-				str = str.replace("}", "");
-			}
-			
-			try {
-				UUID uuid = UUID.fromString(str);
-				return uuid != null;
-			} catch (IllegalArgumentException e) {
-				return false;
-			}
-		}
-		return false;
-	}
-
 	
 	/**
 	 * Use a string to generate a valid byte array from, which complies to the defined keysize.
@@ -194,6 +167,7 @@ public class GenerateLoginToken {
 		return Base64.getEncoder().encodeToString(encValue);							// Base64 encode encrypted payload.
 	}
 	
+	
 	/**
 	 * Returns current date and time of now as string.
 	 * 
@@ -214,31 +188,14 @@ public class GenerateLoginToken {
 	 * @param args
 	 */
 	public static void main(final String[] args) {
-		// Check and load customer specific configuration if applicable
-		if (use_custom_data) {
-			if (GeneratorConfig.encryptionKey != null && GeneratorConfig.encryptionKey.length() > 0) {
-				encryptionKey = GeneratorConfig.encryptionKey;
-			}
-			if (GeneratorConfig.url != null && GeneratorConfig.url.length() > 0) {
-				url = GeneratorConfig.url;
-			}
-		}
-		
 		// Prepare a TreeMap with the string(s) supplied on command line.
 		final TreeMap<String, String> userIDs = new TreeMap<String, String>();			// Create a new TreeMap. These are sorted automatically.
 		userIDs.clear();																// Just in case clear our TreeMap.
 
 		if (args.length > 0) {
 			for (String s : args) {
-				final String[] tmp = s.split("=");
-				// If the tmp array contains at least two entries and if current key doesn't yet exist ...
-				if (tmp.length >= 2 && !userIDs.containsKey(tmp[0]) && tmp[1] != null && tmp[1].length() > 0) {
-					// ... add the key and its value to our list.
-					userIDs.put(tmp[0], tmp[1]);
-				// ... otherwise if length is 1 and if current key doesn't yet exist 
-				} else if (tmp.length == 1 && !userIDs.containsKey(tmp[0])) {
-					// ... use the key as value and add both to our list.
-					userIDs.put(tmp[0], tmp[0]);
+				if (s != null && s.length() > 0 && !userIDs.containsKey(s)) {
+					userIDs.put(s, null); // We just need the key.
 				}
 			}
 		}
@@ -257,26 +214,13 @@ public class GenerateLoginToken {
 				if (pair.getValue() == null || pair.getValue().length() < 1) {
 					System.out.println();												// Draw an empty line if the value is empty.
 				} else {
-					final String user;
-					
-					if (use_uuid) {
-						// Only use value instead of key if value looks like a UUID.
-						if (isUUID(pair.getValue())) {
-							user = pair.getValue();										// Use the value (e.g. UUID).
-						} else {
-							user = pair.getKey();										// Use the key
-						}
-					} else {
-						user = pair.getKey();											// Use the key 
-					}
-
-					final String now = getCalenderNow();								// Get formatted date string
-					final String payload = "{\"user\":\"" + user + "\",\"time\":\"" + now + "\"}";			// Prepare payload. Build JSON the hard way. Sufficient here.
-					final String encryptedPayload;										// Prepare result variable.
-					
 					random.nextBytes(iv);												// Generate random IV.
 					final String encoded_IV = Base64.getEncoder().encodeToString(iv);	// Base64 encode the IV in order to be able to generate a valid link.
-			
+					final String encryptedPayload;										// Prepare result variable.
+					final String user = pair.getKey();									// We just use the key, because the value is always null.
+					final String now = getCalenderNow();								// Get formatted date string
+					final String payload = "{\"user\":\"" + user + "\",\"time\":\"" + now + "\"}";			// Prepare payload. Build JSON the hard way. Sufficient here.
+					
 					// Generate key from encryptionKey and IV, AES-encrypt payload and encode the result as Base64.
 					try {
 						// Encrypt payload
